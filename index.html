@@ -1,1 +1,177 @@
+import React, { useState } from 'react'
 
+// SimInfoApp.jsx
+// A safe, mock frontend template for a SIM/CNIC info lookup website.
+// IMPORTANT: This template DOES NOT access any real SIM/CNIC databases.
+// It shows how to build a professional UI, input validation, rate-limit UI,
+// result display, and how to call a backend API endpoint (/api/check-sim).
+// DO NOT use this to attempt unauthorized access to private data.
+// Instead, integrate this frontend with an official/legal API (PTA/NADRA) or
+// a backend that only returns data the owner has explicitly consented to share.
+
+export default function SimInfoApp() {
+  const [query, setQuery] = useState('')
+  const [type, setType] = useState('msisdn') // 'msisdn' or 'cnic'
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [result, setResult] = useState(null)
+  const [attempts, setAttempts] = useState(0)
+
+  function validateInput(value, type) {
+    if (!value) return 'فیلڈ خالی نہیں ہو سکتی'
+    if (type === 'msisdn') {
+      // basic Pakistan phone validation (starts with 03 and 11 digits)
+      const cleaned = value.replace(/\D/g, '')
+      if (!/^03\d{9}$/.test(cleaned)) return 'براہِ کرم درست موبائل نمبر درج کریں (مثال: 03123456789)'
+    } else {
+      // CNIC 13 digits
+      const cleaned = value.replace(/\D/g, '')
+      if (!/^\d{13}$/.test(cleaned)) return 'براہِ کرم 13 ہندسوں والا CNIC نمبر دیں (مثال: 4210112345678)'
+    }
+    return null
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault()
+    setError(null)
+    setResult(null)
+
+    const v = validateInput(query, type)
+    if (v) {
+      setError(v)
+      return
+    }
+
+    // simple client-side rate-limit UI
+    if (attempts >= 10) {
+      setError('زیادہ کوششیں۔ براہِ کرم کچھ دیر بعد دوبارہ کریں۔')
+      return
+    }
+
+    setLoading(true)
+    setAttempts(a => a + 1)
+
+    try {
+      // Call your backend. Backend should enforce authentication, logging,
+      // consent checks, rate limits, and must only return permitted data.
+      // Replace '/api/check-sim' with your real backend endpoint.
+      const resp = await fetch('/api/check-sim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, query })
+      })
+
+      if (!resp.ok) {
+        const text = await resp.text()
+        throw new Error(text || 'سرور کی خرابی')
+      }
+
+      const data = await resp.json()
+      // The backend should return a sanitized object, for example:
+      // { status: 'ok', owner: 'John Doe', sims: 3, note: 'consent-verified' }
+      setResult(data)
+    } catch (err) {
+      console.error(err)
+      setError('نتیجہ حاصل نہیں ہو سکا — ' + (err.message || 'غلطی'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-6">
+        <h1 className="text-2xl font-semibold mb-2">SIM / CNIC معلومات چیک کریں</h1>
+        <p className="text-sm text-gray-500 mb-4">یہ ٹیمپلیٹ ایک محفوظ ڈیمو انٹرفیس ہے — حقیقی حساس ڈیٹا کے لیے سرکاری APIs یا واضح مالک کی رضا درکار ہے۔</p>
+
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="flex gap-3">
+            <label className={`px-3 py-2 rounded-xl border ${type==='msisdn' ? 'bg-black text-white' : 'bg-white'}`}>
+              <input type="radio" name="type" checked={type==='msisdn'} onChange={()=>setType('msisdn')} className="hidden" />
+              موبائل نمبر
+            </label>
+            <label className={`px-3 py-2 rounded-xl border ${type==='cnic' ? 'bg-black text-white' : 'bg-white'}`}>
+              <input type="radio" name="type" checked={type==='cnic'} onChange={()=>setType('cnic')} className="hidden" />
+              CNIC
+            </label>
+          </div>
+
+          <div>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={type==='msisdn' ? '03123456789' : '4210112345678'}
+              className="w-full border rounded-xl px-4 py-3 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-gray-500">کوششیں: {attempts} / 10</div>
+            <button type="submit" className="px-4 py-2 rounded-xl bg-black text-white disabled:opacity-50" disabled={loading}>
+              {loading ? 'لوڈنگ...' : 'چیک کریں'}
+            </button>
+          </div>
+
+          {error && <div className="text-red-600 text-sm">{error}</div>}
+        </form>
+
+        <div className="mt-6">
+          {result ? (
+            <div className="p-4 bg-gray-100 rounded-lg">
+              <h2 className="font-medium">نتیجہ</h2>
+              <pre className="text-sm mt-2">{JSON.stringify(result, null, 2)}</pre>
+
+              {/* Example nice display if backend returns owner info */}
+              {result && result.status === 'ok' && result.owner && (
+                <div className="mt-3">
+                  <div>مالک کا نام: <strong>{result.owner}</strong></div>
+                  <div>رجسٹرڈ سمز: <strong>{result.sims}</strong></div>
+                  {result.note && <div className="text-xs text-gray-600 mt-1">نوٹ: {result.note}</div>}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-400">نتیجہ ابھی ظاہر نہیں ہوا — ایک نمبر یا CNIC درج کریں اور چیک کریں۔</div>
+          )}
+        </div>
+
+        <div className="mt-6 text-xs text-gray-500">
+          <p className="mb-1">قانونی نوٹس: غیر مجاز طریقے سے دوسروں کا ذاتی ڈیٹا حاصل کرنا جرم ہے۔ یقینی بنائیں کہ آپ کے پاس مطلوبہ اجازتیں ہیں یا آپ سرکاری/قانونی چینل استعمال کر رہے ہیں۔</p>
+          <p>اگر آپ چاہیں تو میں آپ کے لیے backend (Node.js/Express) کا نمونہ بھی بنا دوں گا جو یہ فیک/مک ڈیمو ریزلٹ دے گا — یا میں ایک قانونی PTA‑integrated ورک فلو کا رہنما بھی دے سکتا ہوں۔</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/*
+Suggested backend (Node/Express) pseudocode (implement on your server):
+
+// server.js (pseudo)
+const express = require('express')
+const app = express()
+app.use(express.json())
+
+// IMPORTANT: enforce authentication, rate limiting, consent checks here.
+app.post('/api/check-sim', (req, res) => {
+  const { type, query } = req.body
+
+  // Validate input again on server
+  // Check user session or API key
+  // Check a consent flag or proof of ownership
+
+  // For demo: return a mock response
+  return res.json({ status: 'ok', owner: 'Arman Studio (Demo)', sims: 2, note: 'demo-data-only' })
+})
+
+app.listen(3000)
+
+Security & Legal checklist:
+- Use HTTPS
+- Add server-side input validation
+- Add authentication (OAuth2 / API keys)
+- Log access with timestamps and IPs
+- Implement rate limiting per IP / per account
+- Require documented user consent before returning personal data
+- Consult local law before integrating with any 3rd-party or government databases
+*/
